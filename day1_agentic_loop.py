@@ -25,6 +25,25 @@ tools = [
             "required": ["store_id"]
         }
     }
+,
+    {
+        "name": "get_nearby_stores_comparison",
+        "description": (
+            "Devuelve si las tiendas cercanas a una tienda dada tuvieron "
+            "también una caída de ventas la misma semana, para determinar "
+            "si un problema fue local (solo esa tienda) o regional (zona completa)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "store_id": {
+                    "type": "string",
+                    "description": "ID de la tienda de referencia, ej. 'store_042'"
+                }
+            },
+            "required": ["store_id"]
+        }
+    }
 ]
 
 
@@ -40,6 +59,20 @@ def get_sales_anomaly_data(store_id: str) -> dict:
         }
     }
     return fake_data.get(store_id, {"error": "tienda no encontrada"})
+
+def get_nearby_stores_comparison(store_id: str) -> dict:
+    fake_comparison = {
+        "store_042": {
+            "zone": "Zona Norte",
+            "nearby_stores_checked": ["store_015", "store_027", "store_088"],
+            "results": [
+                {"store_id": "store_015", "deviation_pct": -38.5},
+                {"store_id": "store_027", "deviation_pct": -35.2},
+                {"store_id": "store_088", "deviation_pct": -41.0},
+            ]
+        }
+    }
+    return fake_comparison.get(store_id, {"error": "tienda no encontrada"})
 
 
 def run_agent(user_question: str):
@@ -69,6 +102,8 @@ def run_agent(user_question: str):
 
                 if block.name == "get_sales_anomaly_data":
                     result = get_sales_anomaly_data(**block.input)
+                elif block.name == "get_nearby_stores_comparison":
+                    result = get_nearby_stores_comparison(**block.input)
                 else:
                     result = {"error": "herramienta desconocida"}
 
