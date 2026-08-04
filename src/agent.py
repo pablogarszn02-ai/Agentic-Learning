@@ -8,6 +8,7 @@ from src.tools.anomaly import get_monthly_anomaly_data
 from src.tools.history import get_full_sales_history
 from src.tools.time_metrics import calculate_rolling_year, calculate_ytd
 from src.tools.business import get_department_materiality, get_sales_trend
+from src.tools.forecast import get_ml_forecast
 
 client = Anthropic()
 
@@ -82,6 +83,19 @@ tools = [
             "required": ["store_id", "dept_id"],
         },
     },
+    {
+        "name": "get_ml_forecast",
+        "description": "Predicción de ventas mensuales según el modelo de Machine Learning (XGBoost), basada en momentum reciente (semana anterior, mismo mes año pasado). Complementa la comparación por reglas históricas con una segunda señal independiente.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "store_id": {"type": "string"},
+                "dept_id": {"type": "string"},
+                "year_month": {"type": "string", "description": "YYYY-MM"},
+            },
+            "required": ["store_id", "dept_id", "year_month"],
+        },
+    },
 ]
 
 DISPATCH = {
@@ -91,6 +105,7 @@ DISPATCH = {
     "calculate_ytd": calculate_ytd,
     "get_department_materiality": get_department_materiality,
     "get_sales_trend": get_sales_trend,
+    "get_ml_forecast": get_ml_forecast,
 }
 
 

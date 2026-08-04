@@ -70,6 +70,18 @@ monthly_all = _build_monthly(_raw)
 monthly_yoy = _build_yoy(monthly_all)
 store_monthly_totals = monthly_all.groupby(["Store", "year_month"])["monthly_sales"].sum().rename("store_total_sales")
 
+def _prepare_weekly(df: pd.DataFrame) -> pd.DataFrame:
+    """Datos a nivel semanal, listos para entrenar el modelo de forecasting."""
+    df = df.copy()
+    df["Date"] = pd.to_datetime(df["Date"])
+    df["year"] = df["Date"].dt.year
+    df["month"] = df["Date"].dt.month
+    df["week_of_year"] = df["Date"].dt.isocalendar().week.astype(int)
+    # Descartamos ventas netas negativas (devoluciones/errores), igual que en el análisis mensual
+    df = df[df["Weekly_Sales"] > 0]
+    return df
+
+weekly_all = _prepare_weekly(_raw)
 
 def get_group(store_id: int, dept_id: int) -> pd.DataFrame:
     """Serie histórica ordenada de una tienda+departamento específicos."""

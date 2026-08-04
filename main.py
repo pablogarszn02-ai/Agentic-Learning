@@ -12,5 +12,7 @@ if __name__ == "__main__":
         f"historial completo, Rolling Year, YTD, materialidad del departamento, y tendencia general). "
         f"Úsalas de forma cruzada para VALIDAR si esto es una anomalía real e importante para el "
         f"negocio, o si es ruido/estacionalidad normal de bajo impacto. Da una conclusión final clara "
-        f"indicando qué tan seria es esta situación y por qué."
-    )
+        f"indicando qué tan seria es esta situación y por qué. Además del análisis por reglas históricas, puedes usar get_ml_forecast para "
+        f"contrastar con una segunda señal basada en Machine Learning, si te ayuda a "
+        f"validar con más confianza tu conclusión."
+        )
