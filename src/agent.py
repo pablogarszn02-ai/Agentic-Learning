@@ -1,8 +1,5 @@
-"""Define las herramientas expuestas a Claude y el loop agéntico principal."""
-import json
-from dotenv import load_dotenv
-load_dotenv()
-from anthropic import Anthropic
+"""Agente Analista: investiga anomalías de ventas PASADAS usando herramientas de diagnóstico."""
+from src.agent_core import run_agent_loop
 
 from src.tools.anomaly import get_monthly_anomaly_data
 from src.tools.history import get_full_sales_history
@@ -10,92 +7,30 @@ from src.tools.time_metrics import calculate_rolling_year, calculate_ytd
 from src.tools.business import get_department_materiality, get_sales_trend
 from src.tools.forecast import get_ml_forecast
 
-client = Anthropic()
+SYSTEM_PROMPT = (
+    "Eres un analista de datos senior de retail. Investigas anomalías de ventas usando "
+    "las herramientas disponibles y entregas conclusiones claras y accionables. "
+    "Sé directo: prioriza el insight sobre el relleno. No repitas en texto los números "
+    "que ya mostraste en una tabla. Usa máximo 1-2 tablas cortas en total, no una por "
+    "herramienta. Evita frases de relleno ('aquí tienes un análisis completo y detallado'). "
+    "La conclusión final no debe superar las 200 palabras."
+)
 
 tools = [
-    {
-        "name": "get_monthly_anomaly_data",
-        "description": "Datos de un mes específico: ventas reales vs. esperado (mismo mes, años anteriores), desviación %, contexto.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "store_id": {"type": "string"},
-                "dept_id": {"type": "string"},
-                "year_month": {"type": "string", "description": "YYYY-MM"},
-            },
-            "required": ["store_id", "dept_id", "year_month"],
-        },
-    },
-    {
-        "name": "get_full_sales_history",
-        "description": "Serie histórica COMPLETA de ventas mensuales de una tienda+depto, para ver el patrón general.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}},
-            "required": ["store_id", "dept_id"],
-        },
-    },
-    {
-        "name": "calculate_rolling_year",
-        "description": "Rolling Year (RY): suma de los últimos 12 meses hasta el mes indicado, comparado contra los 12 meses previos. Suaviza estacionalidad.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "store_id": {"type": "string"},
-                "dept_id": {"type": "string"},
-                "as_of_month": {"type": "string", "description": "YYYY-MM"},
-            },
-            "required": ["store_id", "dept_id", "as_of_month"],
-        },
-    },
-    {
-        "name": "calculate_ytd",
-        "description": "YTD (Year to Date): acumulado del año hasta el mes indicado, vs. el mismo periodo del año anterior.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "store_id": {"type": "string"},
-                "dept_id": {"type": "string"},
-                "as_of_month": {"type": "string", "description": "YYYY-MM"},
-            },
-            "required": ["store_id", "dept_id", "as_of_month"],
-        },
-    },
-    {
-        "name": "get_department_materiality",
-        "description": "Qué % de las ventas TOTALES de la tienda representa este departamento en un mes dado. Sirve para saber si una anomalía es relevante para el negocio.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "store_id": {"type": "string"},
-                "dept_id": {"type": "string"},
-                "year_month": {"type": "string", "description": "YYYY-MM"},
-            },
-            "required": ["store_id", "dept_id", "year_month"],
-        },
-    },
-    {
-        "name": "get_sales_trend",
-        "description": "Tendencia general de largo plazo (creciendo/decreciendo/estable), usando regresión lineal sobre todo el historial.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}},
-            "required": ["store_id", "dept_id"],
-        },
-    },
-    {
-        "name": "get_ml_forecast",
-        "description": "Predicción de ventas mensuales según el modelo de Machine Learning (XGBoost), basada en momentum reciente (semana anterior, mismo mes año pasado). Complementa la comparación por reglas históricas con una segunda señal independiente.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "store_id": {"type": "string"},
-                "dept_id": {"type": "string"},
-                "year_month": {"type": "string", "description": "YYYY-MM"},
-            },
-            "required": ["store_id", "dept_id", "year_month"],
-        },
-    },
+    {"name": "get_monthly_anomaly_data", "description": "Datos de un mes específico: ventas reales vs. esperado (mismo mes, años anteriores), desviación %, contexto.",
+     "input_schema": {"type": "object", "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}, "year_month": {"type": "string"}}, "required": ["store_id", "dept_id", "year_month"]}},
+    {"name": "get_full_sales_history", "description": "Serie histórica COMPLETA de ventas mensuales de una tienda+depto.",
+     "input_schema": {"type": "object", "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}}, "required": ["store_id", "dept_id"]}},
+    {"name": "calculate_rolling_year", "description": "Rolling Year (RY): últimos 12 meses vs. los 12 previos.",
+     "input_schema": {"type": "object", "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}, "as_of_month": {"type": "string"}}, "required": ["store_id", "dept_id", "as_of_month"]}},
+    {"name": "calculate_ytd", "description": "YTD: acumulado del año vs. mismo periodo del año anterior.",
+     "input_schema": {"type": "object", "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}, "as_of_month": {"type": "string"}}, "required": ["store_id", "dept_id", "as_of_month"]}},
+    {"name": "get_department_materiality", "description": "% del total de la tienda que representa el departamento.",
+     "input_schema": {"type": "object", "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}, "year_month": {"type": "string"}}, "required": ["store_id", "dept_id", "year_month"]}},
+    {"name": "get_sales_trend", "description": "Tendencia de largo plazo (creciendo/decreciendo/estable).",
+     "input_schema": {"type": "object", "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}}, "required": ["store_id", "dept_id"]}},
+    {"name": "get_ml_forecast", "description": "Predicción del modelo ML para un MES YA OCURRIDO (segunda señal de validación, no forecasting futuro).",
+     "input_schema": {"type": "object", "properties": {"store_id": {"type": "string"}, "dept_id": {"type": "string"}, "year_month": {"type": "string"}}, "required": ["store_id", "dept_id", "year_month"]}},
 ]
 
 DISPATCH = {
@@ -110,32 +45,4 @@ DISPATCH = {
 
 
 def run_agent(user_question: str):
-    messages = [{"role": "user", "content": user_question}]
-    total_input_tokens = 0
-    total_output_tokens = 0
-
-    while True:
-        response = client.messages.create(
-            model="claude-sonnet-4-6", max_tokens=2000, tools=tools, messages=messages
-        )
-        total_input_tokens += response.usage.input_tokens
-        total_output_tokens += response.usage.output_tokens
-        messages.append({"role": "assistant", "content": response.content})
-
-        if response.stop_reason != "tool_use":
-            final_text = "".join(b.text for b in response.content if b.type == "text")
-            print("\n🤖 RESPUESTA FINAL:\n", final_text)
-            break
-
-        tool_results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                print(f"\n🔧 Claude pidió usar: {block.name}({block.input})")
-                func = DISPATCH.get(block.name)
-                result = func(**block.input) if func else {"error": "herramienta desconocida"}
-                tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": json.dumps(result)})
-
-        messages.append({"role": "user", "content": tool_results})
-
-    cost_estimate = (total_input_tokens / 1_000_000 * 3) + (total_output_tokens / 1_000_000 * 15)
-    print(f"\n💰 Tokens usados: {total_input_tokens} entrada / {total_output_tokens} salida — ~${cost_estimate:.4f} USD")
+    run_agent_loop(tools, DISPATCH, SYSTEM_PROMPT, user_question, max_tokens=1000)
